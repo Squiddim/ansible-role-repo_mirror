@@ -10,3 +10,5 @@ repo_mirror_packages:
   - yarnpkg
   - nodejs
   - make
+  - zsh
+  - curl

@@ -1,0 +1,75 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# usage:    This script is used to mirror the {{ item.name }} package repository using quick-fedora-mirror.
+#
+
+repo_name={{ item.name | quote }}
+base_path={{ repo_mirror_base_path | quote }}/$repo_name
+log_file={{ repo_mirror_log_path | quote }}/$repo_name/repo_$repo_name.log
+status_file=$base_path.json
+owner={{ repo_mirror_user | quote }}
+
+datetime_format={{ repo_mirror_datetime_format | quote }}
+
+lock=/tmp/sync_${repo_name}_mirror.lck
+exitcode=-1
+
+function writestatistics() {
+    local syncsize="$(du -h "${base_path}" | tail -1 | cut -f1)"
+    local synctime="$(date "${datetime_format}")"
+
+    echo "{" > "${status_file}"
+    echo "\"size\": \"${syncsize}\"," >> "${status_file}"
+    echo "\"time\": \"${synctime}\"," >> "${status_file}"
+    echo "\"status\": \"${exitcode}\""  >> "${status_file}"
+    echo "}" >> "${status_file}"
+}
+
+function log-message() {
+    # usage: log <quit> <"message"> [exitcode]
+    # example: log-message 1 "Mirror is already up to date!" 0
+
+    local quit="$1"
+    local message="$2"
+
+    echo "[$(date "${datetime_format}")] ${message}" >> "${log_file}"
+    echo "---------------------------------------------------------------" >> "${log_file}"
+
+    if [ "${quit}" = 1 ]; then
+        local exitcode="$3"
+        writestatistics
+{% if item.additional_report is defined %}
+        {{ item.additional_report }}
+{% endif %}
+        exit ${exitcode}
+    fi
+}
+
+# Running as the incorrect user (probably root) could potentially create files
+# with the wrong ownership, leading to issues for later syncs:
+if ! username=$(id -un); then
+    echo 'Could not obtain user name.'
+    exit 1
+fi
+if [ "$username" != "$owner" ]; then
+    echo "Running as $username, but must run as $owner, otherwise this will break future syncs!"
+    exit 1
+fi
+
+# create lock or exit if already locked in order to prevent multiple syncs
+exec 9>"${lock}"
+flock -n 9 || log-message 1 "$repo_name mirror sync job is already running!" 1
+
+# start the quick-fedora-mirror sync
+log-message 0 "Started $repo_name mirror sync job using quick-fedora-mirror."
+
+# Run quick-fedora-mirror with the specific config file
+/usr/local/bin/quick-fedora-mirror -c /etc/mirror/{{ item.name }}.conf
+exitcode="$?"
+
+if [ "${exitcode}" = "0" ]; then
+    log-message 1 "Finished $repo_name mirror sync job." ${exitcode} # = 0
+else
+    log-message 1 "Quick-fedora-mirror had an error: ${exitcode}" ${exitcode} # >= 1
+fi

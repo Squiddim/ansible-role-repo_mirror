@@ -57,6 +57,35 @@
     - 'role::repo_mirror:configuration'
     - 'role::repo_mirror:configuration:scripts'
 
+- name: Copy quick-fedora-mirror script
+  ansible.builtin.copy:
+    src: files/quick-fedora-mirror.zsh
+    dest: /usr/local/bin/quick-fedora-mirror.zsh
+    owner: '{{ item.user | default(repo_mirror_user) }}'
+    group: root
+    mode: "0740"
+  when: "'quick_fedora' in (repo_mirror_repos | map(attribute='type', default=''))"
+  tags:
+    - 'role::repo_mirror'
+    - 'role::repo_mirror:configuration'
+    - 'role::repo_mirror:configuration:scripts'
+
+    ##!! Missing a task to create the /etc/mirror directory
+
+- name: Create quick-fedora script config
+  ansible.builtin.template:
+    src: "usr/local/bin/quick_fedora_mirror.conf.j2"
+    dest: /usr/local/bin/{{ item.name }}.conf
+    owner: mirror
+    group: mirror
+    mode: "0640"
+  with_items: "{{ repo_mirror_repos }}"
+  when: item.name is defined and item.type == 'quick_fedora'
+  tags:
+    - 'role::repo_mirror'
+    - 'role::repo_mirror:configuration'
+    - 'role::repo_mirror:configuration:scripts'
+
 - name: Create log rotation config
   ansible.builtin.template:
     src: etc/logrotate.d/config.template.j2
