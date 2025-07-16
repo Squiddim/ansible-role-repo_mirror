@@ -70,8 +70,6 @@
     - 'role::repo_mirror:configuration'
     - 'role::repo_mirror:configuration:scripts'
 
-    ##!! Missing a task to create the /etc/mirror directory
-
 - name: Create quick-fedora script config
   ansible.builtin.template:
     src: "usr/local/bin/quick_fedora_mirror.conf.j2"
